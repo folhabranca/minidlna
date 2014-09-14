@@ -218,6 +218,24 @@ fi
 CPPFLAGS_SAVE="$CPPFLAGS"
 for dir in "" /usr/local $INCLUDE_DIR; do
     if test -n "$dir"; then
+        CPPFLAGS="$CPPFLAGS_SAVE -I$dir"
+    fi
+    AC_CHECK_HEADERS([libswscale/swscale.h ffmpeg/libswscale/swscale.h libav/libswscale/swscale.h swscale.h ffmpeg/swscale.h libav/swscale.h], [HAVE_LIBSWSCALE=1])
+    if test -z "$HAVE_LIBSWSCALE"; then
+        unset ac_cv_header_swscale_h
+        unset ac_cv_header_libswscale_swscale_h
+        unset ac_cv_header_ffmpeg_swscale_h
+        unset ac_cv_header_ffmpeg_libswscale_swscale_h
+        unset ac_cv_header_libav_swscale_h
+        unset ac_cv_header_libav_libswscale_swscale_h
+        continue
+    fi
+    break
+done
+
+CPPFLAGS_SAVE="$CPPFLAGS"
+for dir in "" /usr/local $INCLUDE_DIR; do
+    if test -n "$dir"; then
         CPPFLAGS="$CPPFLAGS -I$dir"
     fi
     AC_CHECK_HEADERS([jpeglib.h sqlite3.h libexif/exif-loader.h id3tag.h ogg/ogg.h vorbis/codec.h FLAC/metadata.h],,[unset $as_ac_Header; break],)
@@ -589,6 +607,33 @@ AC_ARG_ENABLE(readynas,
                 AC_MSG_RESULT([no])
         ]
 )
+
+AC_MSG_CHECKING([whether to build a video thumbnail support])
+AC_ARG_ENABLE(videothumbnail,
+        [  --enable-videothumbnail       enable video thumbnail generation using libavcodec and libswscale],[
+        if test "$enableval" = "yes"; then
+                AC_DEFINE([ENABLE_VIDEO_THUMB],[1],[Define to 1 if you want to enable video thumbnail generation])
+                AC_MSG_RESULT([yes])
+		ENABLE_THUMB=1
+        else
+                AC_MSG_RESULT([no])
+        fi
+        ],[
+                AC_MSG_RESULT([no])
+        ]
+)
+if test x"$ENABLE_THUMB" = x"1"; then
+	if test -z "$HAVE_LIBSWSCALE"; then
+		AC_MSG_ERROR([videothumbnail requires libswscale headers])
+	fi
+
+
+	AC_CHECK_LIB(swscale ,[sws_getCachedContext], [LIBSWSCALE_LIBS="-lswscale"], [unset ac_cv_lib_swscale_getCachedContext])
+	AC_SUBST(LIBSWSCALE_LIBS)
+
+	AC_CHECK_LIB(avcodec ,[avcodec_version], [LIBAVCODEC_LIBS="-lavcodec"], [AC_MSG_ERROR([videothumbnail requires libavcodec - could not find libavcodec - part of ffmpeg])])
+	AC_SUBST(LIBAVCODEC_LIBS)
+fi
 
 AC_MSG_CHECKING([whether to build a static binary executable])
 AC_ARG_ENABLE(static,
