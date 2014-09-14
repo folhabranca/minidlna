@@ -1862,6 +1862,130 @@ SamsungSetBookmark(struct upnphttp * h, const char * action)
 	ClearNameValueList(&data);	
 }
 
+static void
+SamsungGetSemanticQueryCapabilities(struct upnphttp * h, const char * action)
+{
+	static const char resp[] =
+		"<u:X_GetSemanticQueryCapabilitiesResponse xmlns:u=\"urn:schemas-upnp-org:service:ContentDirectory\">"
+		"<SemanticQueryCapabilities>"
+		"MACRO_RECENTLYADDED_ALL,MACRO_RECENTLYPLAYED_ALL"
+		"</SemanticQueryCapabilities>"
+		"</u:X_GetSemanticQueryCapabilitiesResponse>";
+
+	BuildSendAndCloseSoapResp(h, resp, sizeof(resp)-1);
+}
+
+static void
+SamsungGetSemanticList(struct upnphttp * h, const char * action)
+{
+	static const char resp[] =
+			"<u:X_GetSemanticListResponse "
+			"xmlns:u=\"urn:schemas-upnp-org:service:ContentDirectory:1\">"
+			"<Result>"
+			"&lt;DIDL-Lite"
+			CONTENT_DIRECTORY_SCHEMAS;
+
+	struct NameValueParserData data;
+	char *SemanticQueryRequest;
+	int  StartingIndex = 0, RequestedCount = 0;
+	char *ptr, *sql;
+	char *zErrMsg = NULL;
+	int totalMatches = 0;
+	struct Response args;
+	struct string_s str;
+	int ret;
+
+	memset(&args, 0, sizeof(args));
+	memset(&str, 0, sizeof(str));
+
+	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data, 0);
+	SemanticQueryRequest = GetValueFromNameValueList(&data, "SemanticQueryRequest");
+
+	if( strcmp(SemanticQueryRequest, "MACRO_RECENTLYADDED_ALL" ) )
+	{
+		SoapError(h, 402, "Invalid Args");
+		goto semantic_error;
+	}
+
+	if( (ptr = GetValueFromNameValueList(&data, "StartingIndex")) )
+		StartingIndex = atoi(ptr);
+	if( StartingIndex < 0 )
+	{
+		SoapError(h, 402, "Invalid Args");
+		goto semantic_error;
+	}
+	if( (ptr = GetValueFromNameValueList(&data, "RequestedCount")) )
+		RequestedCount = atoi(ptr);
+	if( RequestedCount < 0 )
+	{
+		SoapError(h, 402, "Invalid Args");
+		goto semantic_error;
+	}
+	if( !RequestedCount )
+		RequestedCount = -1;
+
+	str.data = malloc(DEFAULT_RESP_SIZE);
+	str.size = DEFAULT_RESP_SIZE;
+	str.off = sprintf(str.data, "%s", resp);
+	args.iface = h->iface;
+	args.filter = set_filter_flags(NULL, h);
+	if( args.filter & FILTER_DLNA_NAMESPACE )
+		ret = strcatf(&str, DLNA_NAMESPACE);
+	strcatf(&str, "&gt;\n");
+
+	args.returned = 0;
+
+	totalMatches = sql_get_int_field(db, "SELECT count(*) from OBJECTS o left join DETAILS d on (o.DETAIL_ID = d.ID)"
+	                                     " where PARENT_ID in "
+	                                     " ( '" VIDEO_ALL_ID "',"
+	                                     " '" MUSIC_ALL_ID "',"
+	                                     " '" IMAGE_ALL_ID "')"
+	                                     " AND TIMESTAMP > strftime('%%s', 'now', '-90 day')");
+
+	if ( totalMatches > 0 )
+	{
+		args.requested = RequestedCount;
+		args.client = h->req_client ? h->req_client->type->type : 0;
+		args.flags = h->req_client ? h->req_client->type->flags : 0;
+		args.str = &str;
+
+		sql = sqlite3_mprintf( SELECT_COLUMNS
+	                      "from OBJECTS o left join DETAILS d on (d.ID = o.DETAIL_ID)"
+	                      " where PARENT_ID in"
+	                      " ( '" VIDEO_ALL_ID "',"
+	                      " '" MUSIC_ALL_ID "',"
+	                      " '" IMAGE_ALL_ID "')"
+	                      " AND TIMESTAMP > strftime('%%s', 'now', '-90 day')"
+	                      " ORDER BY TIMESTAMP DESC"
+	                      " limit %d, %d",
+	                      StartingIndex, RequestedCount);
+		DPRINTF(E_DEBUG, L_HTTP, "Search SQL: %s\n", sql);
+		ret = sqlite3_exec(db, sql, callback, (void *) &args, &zErrMsg);
+		if( (ret != SQLITE_OK) && (zErrMsg != NULL) )
+		{
+			DPRINTF(E_WARN, L_HTTP, "SQL error: %s\nBAD SQL: %s\n", zErrMsg, sql);
+			sqlite3_free(zErrMsg);
+			totalMatches = 0;
+			args.returned = 0;
+		}
+		sqlite3_free(sql);
+	}
+	else
+		totalMatches = 0;
+
+	ret = strcatf(&str, "&lt;/DIDL-Lite&gt;</Result>\n"
+	                    "<NumberReturned>%u</NumberReturned>\n"
+	                    "<TotalMatches>%u</TotalMatches>\n"
+	                    "<UpdateID>%u</UpdateID>"
+	                    "</u:X_GetSemanticListResponse>",
+	                    args.returned, totalMatches, updateID);
+	BuildSendAndCloseSoapResp(h, str.data, str.off);
+
+semantic_error:
+	ClearNameValueList(&data);
+	free(str.data);
+}
+
 static const struct 
 {
 	const char * methodName; 
@@ -1883,6 +2007,8 @@ soapMethods[] =
 	{ "RegisterDevice", RegisterDevice},
 	{ "X_GetFeatureList", SamsungGetFeatureList},
 	{ "X_SetBookmark", SamsungSetBookmark},
+	{ "X_GetSemanticQueryCapabilities", SamsungGetSemanticQueryCapabilities},
+	{ "X_GetSemanticList", SamsungGetSemanticList},
 	{ 0, 0 }
 };
 
