@@ -64,6 +64,10 @@ static const struct {
 	{ USER_ACCOUNT, "user" },
 	{ FORCE_SORT_CRITERIA, "force_sort_criteria" },
 	{ MAX_CONNECTIONS, "max_connections" },
+#ifdef ENABLE_VIDEO_THUMB
+	{ ENABLE_THUMB, "enable_thumbnail" },
+	{ THUMB_WIDTH, "thumbnail_width" },
+#endif
 	{ MERGE_MEDIA_DIRS, "merge_media_dirs" }
 };
 
