@@ -524,3 +524,17 @@ resolve_unknown_type(const char * path, media_types dir_type)
 	return type;
 }
 
+#ifdef ENABLE_VIDEO_THUMB
+int
+rename_artcache_dir(const char * oldpath, const char * newpath)
+{
+	char old_artcache[PATH_MAX];
+	char new_artcache[PATH_MAX];
+
+	snprintf(old_artcache, sizeof(old_artcache), "%s/art_cache%s", db_path, oldpath);
+	snprintf(new_artcache, sizeof(old_artcache), "%s/art_cache%s", db_path, newpath);
+
+	return rename(old_artcache, new_artcache);
+}
+#endif
+
