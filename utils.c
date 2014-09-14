@@ -440,6 +440,29 @@ is_album_art(const char * name)
 	return (album_art_name ? 1 : 0);
 }
 
+#define IGNORE_FILENAME ".mediaignore"
+#define IGNOREALL_FILENAME ".mediaignoreall"
+int
+has_ignore(const char * dir, int checkboth)
+{
+	char path[PATH_MAX];
+	int spfr;
+	int hignore = 0;
+	char *ignore_path = path;
+
+	spfr = snprintf(ignore_path, PATH_MAX, "%s/" IGNOREALL_FILENAME, dir);
+	if( spfr > 0 && spfr < PATH_MAX)
+		hignore = !access(ignore_path, F_OK);
+	if( !hignore  && checkboth)
+	{
+		spfr = snprintf(ignore_path, PATH_MAX, "%s/" IGNORE_FILENAME, dir);
+		if( spfr > 0 && spfr < PATH_MAX)
+			hignore = !access(ignore_path, F_OK);
+	}
+
+	return hignore;
+}
+
 int
 resolve_unknown_type(const char * path, media_types dir_type)
 {

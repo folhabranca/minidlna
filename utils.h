@@ -89,6 +89,7 @@ int is_image(const char * file);
 int is_playlist(const char * file);
 int is_caption(const char * file);
 int is_album_art(const char * name);
+int has_ignore(const char * dir, int checkboth);
 int resolve_unknown_type(const char * path, media_types dir_type);
 const char *mime_to_ext(const char * mime);
 

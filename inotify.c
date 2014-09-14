@@ -293,6 +293,11 @@ inotify_insert_file(char * name, const char * path)
 	media_types types = ALL_MEDIA;
 	struct media_dir_s * media_path = media_dirs;
 	struct stat st;
+	char dirpath[PATH_MAX];
+
+	strncpyt(dirpath, path, sizeof(dirpath));
+	if ( has_ignore(dirname((char*)dirpath), 1) )
+		return -1;
 
 	/* Is it cover art for another file? */
 	if( is_image(path) )
