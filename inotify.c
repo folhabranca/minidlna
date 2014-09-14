@@ -672,6 +672,9 @@ start_inotify()
 		DPRINTF(E_WARN, L_INOTIFY,  "Failed to reduce inotify thread priority\n");
 	sqlite3_release_memory(1<<31);
 	av_register_all();
+#ifdef ENABLE_VIDEO_THUMB
+	avcodec_register_all();
+#endif
         
 	while( !quitting )
 	{

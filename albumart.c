@@ -37,6 +37,8 @@
 #include "sql.h"
 #include "utils.h"
 #include "image_utils.h"
+#include "libav.h"
+#include "video_thumb.h"
 #include "log.h"
 
 static int
@@ -345,14 +347,49 @@ found_file:
 	return NULL;
 }
 
+#ifdef ENABLE_VIDEO_THUMB
+char *
+generate_thumbnail(const char * path)
+{
+	char *tfile = NULL;
+	char cache_dir[MAXPATHLEN];
+
+	if( art_cache_exists(path, &tfile) )
+		return tfile;
+
+	memset(&cache_dir, 0, sizeof(cache_dir));
+
+	if ( is_video(path) )
+	{
+		strncpyt(cache_dir, tfile, sizeof(cache_dir)-1);
+		if ( !make_dir(dirname(cache_dir), S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) &&
+			!video_thumb_generate_tofile(path, tfile, 20, runtime_vars.thumb_width))
+			return tfile;
+	}
+	free(tfile);
+
+	return 0;
+}
+#endif
+
 int64_t
 find_album_art(const char *path, uint8_t *image_data, int image_size)
 {
 	char *album_art = NULL;
 	int64_t ret = 0;
 
-	if( (image_size && (album_art = check_embedded_art(path, image_data, image_size))) ||
-	    (album_art = check_for_album_file(path)) )
+	if ( image_size )
+		album_art = check_embedded_art(path, image_data, image_size);
+
+	if ( !album_art )
+		album_art = check_for_album_file(path);
+
+#ifdef ENABLE_VIDEO_THUMB
+	if ( !album_art && GETFLAG(THUMB_MASK) )
+		album_art = generate_thumbnail(path);
+#endif
+
+	if( album_art )
 	{
 		ret = sql_get_int_field(db, "SELECT ID from ALBUM_ART where PATH = '%q'", album_art);
 		if( !ret )
