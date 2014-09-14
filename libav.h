@@ -180,3 +180,43 @@ lav_is_thumbnail_stream(AVStream *s, uint8_t **data, int *size)
 #endif
 	return 0;
 }
+
+static inline AVFrame*
+lav_frame_alloc(void)
+{
+#if LIBAVCODEC_VERSION_INT >= ((55<<16)+(28<<8)+1)
+	return av_frame_alloc();
+#else
+	return avcodec_alloc_frame();
+#endif
+}
+
+static inline void
+lav_frame_unref(AVFrame *ptr)
+{
+#if LIBAVCODEC_VERSION_INT >= ((55<<16)+(28<<8)+1)
+	return av_frame_unref(ptr);
+#else
+	return avcodec_get_frame_defaults(ptr);
+#endif
+}
+
+static inline int
+lav_avcodec_open(AVCodecContext *avctx, const AVCodec *codec, AVDictionary **options)
+{
+#if LIBAVCODEC_VERSION_INT >= ((53<<16)+(6<<8)+0)
+	return avcodec_open2(avctx, codec, options);
+#else
+	return avcodec_open(avctx, codec);
+#endif
+}
+
+static inline int
+lav_avcodec_decode_video(AVCodecContext *avctx, AVFrame *picture, int *got_picture_ptr, AVPacket *avpkt)
+{
+#if LIBAVCODEC_VERSION_INT >= ((52<<16)+(23<<8)+0)
+	return avcodec_decode_video2(avctx, picture, got_picture_ptr, avpkt);
+#else
+	return avcodec_decode_video(avctx, picture, got_picture_ptr, avpkt->data, avpkt->size);
+#endif
+}
