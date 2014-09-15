@@ -157,11 +157,9 @@ video_thumb_generate_tofile(const char *moviefname, const char *thumbfname, int 
 	return ret;
 }
 
-
-int
-video_thumb_generate_tobuff(const char *moviefname, void* imgbuffer, int seek, int width, enum AVPixelFormat pixfmt)
+static int
+video_thumb_generate_ctx_tobuff(AVFormatContext *fctx, void* imgbuffer, int seek, int width, enum AVPixelFormat pixfmt)
 {
-	AVFormatContext *fctx = NULL;
 	AVFrame *frame = NULL, *scframe = NULL;
 	AVPacket packet;
 	AVCodecContext *vcctx = NULL;
@@ -171,11 +169,11 @@ video_thumb_generate_tobuff(const char *moviefname, void* imgbuffer, int seek, i
 	int dwidth, dheight;
 	image_s* buffer = (image_s*) imgbuffer;
 
-	if (!moviefname)
-		return ret;
+	if (!fctx)
+		return -1;
 
 	if (!buffer)
-		return ret;
+		return -1;
 
 	if (seek < 0)
 		seek = 0;
@@ -188,13 +186,6 @@ video_thumb_generate_tobuff(const char *moviefname, void* imgbuffer, int seek, i
 		width = 480;
 
 	av_init_packet(&packet);
-
-	avret = lav_open(&fctx, moviefname);
-	if (avret)
-	{
-		DPRINTF(E_WARN, L_METADATA, "video_thumb_generate_tobuff: unable to open movie file (%s) \n", moviefname);
-		return ret;
-	}
 
 	vs = -1;
 	for (i =0; i<fctx->nb_streams; i++)
@@ -209,14 +200,14 @@ video_thumb_generate_tobuff(const char *moviefname, void* imgbuffer, int seek, i
 
 	if( vs < 0)
 	{
-		DPRINTF(E_WARN, L_METADATA, "video_thumb_generate_tobuff: unable to find a video stream in (%s) \n", moviefname);
+		DPRINTF(E_WARN, L_METADATA, "video_thumb_generate_tobuff: unable to find a video stream \n");
 		return ret;
 	}
 
 	vcodec = avcodec_find_decoder(vcctx->codec_id);
 	if (!vcodec)
 	{
-		DPRINTF(E_WARN, L_METADATA, "video_thumb_generate_tobuff: unable to find a video decoder for (%s) \n", moviefname);
+		DPRINTF(E_WARN, L_METADATA, "video_thumb_generate_tobuff: unable to find a video decoder \n");
 		goto thumb_generate_error;
 	}
 
@@ -225,7 +216,7 @@ video_thumb_generate_tobuff(const char *moviefname, void* imgbuffer, int seek, i
 	avret =  lav_avcodec_open(vcctx, vcodec, NULL);
 	if(avret < 0)
 	{
-		DPRINTF(E_WARN, L_METADATA, "video_thumb_generate_tobuff: unable to open a decoder for (%s) \n", moviefname);
+		DPRINTF(E_WARN, L_METADATA, "video_thumb_generate_tobuff: unable to open a decoder \n");
 		goto thumb_generate_error;
 	}
 
@@ -304,8 +295,29 @@ thumb_generate_error:
 	av_free_packet(&packet);
 	av_free(frame);
 	avcodec_close(vcctx);
-	lav_close(fctx);
 
 	return ret;
 }
+
+int
+video_thumb_generate_tobuff(const char *moviefname, void* imgbuffer, int seek, int width, enum AVPixelFormat pixfmt)
+{
+	AVFormatContext *fctx = NULL;
+	int ret = -1;
+
+	if(!moviefname)
+		return -1;
+
+	if (lav_open(&fctx, moviefname))
+	{
+		DPRINTF(E_WARN, L_METADATA, "video_thumb_generate_tobuff: unable to open movie file (%s) \n", moviefname);
+		return -1;
+	}
+
+	ret = video_thumb_generate_ctx_tobuff(fctx, imgbuffer, seek, width, pixfmt);
+
+	lav_close(fctx);
+	return ret;
+}
+
 #endif
