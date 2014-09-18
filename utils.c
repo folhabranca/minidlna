@@ -538,3 +538,61 @@ rename_artcache_dir(const char * oldpath, const char * newpath)
 }
 #endif
 
+char*
+base64_encode(const unsigned char *data, size_t ilen, size_t *olen)
+{
+	static const char table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+					"abcdefghijklmnopqrstuvwxyz"
+					"0123456789+/";
+
+	unsigned char a,b,c;
+	unsigned int idx;
+	unsigned int i , j, s;
+	char *obuff;
+	size_t osize;
+
+	if ( !data  || !ilen )
+		return 0;
+
+	osize = 4 *((ilen + 2) / 3);
+	obuff = malloc(osize);
+
+	if ( !obuff )
+		return 0;
+
+	s = ilen - (ilen % 3);
+
+	for (i = 0, j = 0; i < s;)
+	{
+		a = data[i++];
+		b = data[i++];
+		c = data[i++];
+
+		idx = (a << 16) + (b << 8) + c;
+		obuff[j++] = table[(idx >> 3 * 6) & 0x3F];
+		obuff[j++] = table[(idx >> 2 * 6) & 0x3F];
+		obuff[j++] = table[(idx >> 6) & 0x3F];
+		obuff[j++] = table[idx & 0x3F];
+	}
+	if (s < ilen)
+	{
+		a = data[i++];
+		b = i < ilen ? data[i++] : 0;
+		c = 0;
+
+		idx = (a << 16) + (b << 8) + c;
+		obuff[j++] = table[(idx >> 3 * 6) & 0x3F];
+		obuff[j++] = table[(idx >> 2 * 6) & 0x3F];
+		obuff[j++] = table[(idx >> 6) & 0x3F];
+		obuff[j++] = table[idx & 0x3F];
+
+		obuff[osize -1] = '=';
+
+		if ( (ilen % 3) == 1)
+			obuff[osize - 2] = '=';
+	}
+
+	*olen = osize;
+
+	return obuff;
+}

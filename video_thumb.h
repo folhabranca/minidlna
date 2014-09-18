@@ -30,5 +30,8 @@ video_thumb_generate_tofile(const char *moviefname, const char* thumbfname, int 
 int
 video_thumb_generate_tobuff(const char *moviefname, void* imgbuffer, int seek, int width, enum AVPixelFormat pixfmt);
 
+char*
+video_thumb_generate_mta_file(const char *moviefname, int duration, int allblack);
+
 #endif
 

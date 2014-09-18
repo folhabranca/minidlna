@@ -95,6 +95,7 @@ const char *mime_to_ext(const char * mime);
 
 /* Others */
 int make_dir(char * path, mode_t mode);
+char *base64_encode(const unsigned char *data, size_t ilen, size_t *olen);
 unsigned int DJBHash(uint8_t *data, int len);
 #ifdef ENABLE_VIDEO_THUMB
 int rename_artcache_dir(const char * oldpath, const char * newpath);
