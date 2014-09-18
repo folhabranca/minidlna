@@ -54,6 +54,7 @@ struct runtime_vars_s {
 #ifdef ENABLE_VIDEO_THUMB
 	int thumb_width;	/* Video thumbnail width */
 #endif
+	int mta;
 };
 
 struct string_s {

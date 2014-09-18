@@ -535,6 +535,7 @@ init(int argc, char **argv)
 #ifdef ENABLE_VIDEO_THUMB
 	runtime_vars.thumb_width = 160;
 #endif
+	runtime_vars.mta = 0;
 
 	/* read options file first since
 	 * command line arguments have final say */
@@ -747,6 +748,9 @@ init(int argc, char **argv)
 			runtime_vars.thumb_width = atoi(ary_options[i].value);
 			break;
 #endif
+		case ENABLE_MTA:
+			runtime_vars.mta = atoi(ary_options[i].value);
+			break;
 		default:
 			DPRINTF(E_ERROR, L_GENERAL, "Unknown option in file %s\n",
 				optionsfile);

@@ -61,6 +61,7 @@ enum upnpconfigoptions {
 	ENABLE_THUMB,			/* enable thumbnail generation */
 	THUMB_WIDTH,			/* thunbnail image with */
 #endif
+	ENABLE_MTA,
 	MERGE_MEDIA_DIRS		/* don't add an extra directory level when there are multiple media dirs */
 };
 
