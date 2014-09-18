@@ -434,6 +434,8 @@ inotify_insert_file(char * name, const char * path)
 			next_pl_fill = time(NULL) + 120; // Schedule a playlist scan for 2 minutes from now.
 			//DEBUG DPRINTF(E_WARN, L_INOTIFY,  "Playlist scan scheduled for %s", ctime(&next_pl_fill));
 		}
+		if( is_video(path))
+			GenerateMTA(path);
 	}
 	return depth;
 }
@@ -614,6 +616,10 @@ inotify_remove_file(const char * path)
 		strcpy(strchr(vthumb, '\0')-4, ".jpg");
 	}
 #endif
+	remove(art_cache);
+
+	snprintf(art_cache, sizeof(art_cache), "%s/art_cache%s.mta", db_path, path);
+	sql_exec(db, "DELETE from MTA where PATH = '%q'", art_cache);
 	remove(art_cache);
 
 	return 0;
