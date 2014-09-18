@@ -350,6 +350,7 @@ GetCurrentConnectionInfo(struct upnphttp * h, const char * action)
 #define FILTER_PV_SUBTITLE_FILE_URI              0x08000000
 #define FILTER_PV_SUBTITLE                       0x0C000000
 #define FILTER_AV_MEDIA_CLASS                    0x10000000
+#define FILTER_SEC_META_FILE_INFO                0x20000000
 
 static uint32_t
 set_filter_flags(char *filter, struct upnphttp *h)
@@ -362,7 +363,7 @@ set_filter_flags(char *filter, struct upnphttp *h)
 		/* Not the full 32 bits.  Skip vendor-specific stuff by default. */
 		flags = 0xFFFFFF;
 		if (samsung)
-			flags |= FILTER_SEC_CAPTION_INFO_EX | FILTER_SEC_DCM_INFO;
+			flags |= FILTER_SEC_CAPTION_INFO_EX | FILTER_SEC_DCM_INFO | FILTER_SEC_META_FILE_INFO;
 	}
 	if (flags)
 		return flags;
@@ -496,6 +497,10 @@ set_filter_flags(char *filter, struct upnphttp *h)
 		else if( strcmp(item, "sec:dcmInfo") == 0 )
 		{
 			flags |= FILTER_SEC_DCM_INFO;
+		}
+		else if( strcmp(item, "sec:MetaFileInfo") == 0 )
+		{
+			flags |= FILTER_SEC_META_FILE_INFO;
 		}
 		else if( strcmp(item, "res@pv:subtitleFileType") == 0 )
 		{
@@ -715,7 +720,7 @@ object_exists(const char *object)
 #define COLUMNS "o.DETAIL_ID, o.CLASS," \
                 " d.SIZE, d.TITLE, d.DURATION, d.BITRATE, d.SAMPLERATE, d.ARTIST," \
                 " d.ALBUM, d.GENRE, d.COMMENT, d.CHANNELS, d.TRACK, d.DATE, d.RESOLUTION," \
-                " d.THUMBNAIL, d.CREATOR, d.DLNA_PN, d.MIME, d.ALBUM_ART, d.DISC "
+                " d.THUMBNAIL, d.CREATOR, d.DLNA_PN, d.MIME, d.ALBUM_ART, d.MTA, d.DISC "
 #define SELECT_COLUMNS "SELECT o.OBJECT_ID, o.PARENT_ID, o.REF_ID, " COLUMNS
 
 static int
@@ -725,7 +730,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 	char *id = argv[0], *parent = argv[1], *refID = argv[2], *detailID = argv[3], *class = argv[4], *size = argv[5], *title = argv[6],
 	     *duration = argv[7], *bitrate = argv[8], *sampleFrequency = argv[9], *artist = argv[10], *album = argv[11],
 	     *genre = argv[12], *comment = argv[13], *nrAudioChannels = argv[14], *track = argv[15], *date = argv[16], *resolution = argv[17],
-	     *tn = argv[18], *creator = argv[19], *dlna_pn = argv[20], *mime = argv[21], *album_art = argv[22];
+	     *tn = argv[18], *creator = argv[19], *dlna_pn = argv[20], *mime = argv[21], *album_art = argv[22], *mta = argv[23];
 	char dlna_buf[128];
 	const char *ext;
 	struct string_s *str = passed_args->str;
@@ -887,6 +892,10 @@ callback(void *args, int argc, char **argv, char **azColName)
 			/* Get bookmark */
 			ret = strcatf(str, "&lt;sec:dcmInfo&gt;CREATIONDATE=0,FOLDER=%s,BM=%d&lt;/sec:dcmInfo&gt;",
 			              title, sql_get_int_field(db, "SELECT SEC from BOOKMARKS where ID = '%s'", detailID));
+		}
+		if( (passed_args->filter & FILTER_SEC_META_FILE_INFO) && runtime_vars.mta > 0 && mta && *mta != '0' ) {
+			ret = strcatf(str, "&lt;sec:MetaFileInfo sec:type=&quot;mta&quot;&gt;http://%s:%d/MTA/%s.mta&lt;/sec:MetaFileInfo&gt;",
+				lan_addr[passed_args->iface].str, runtime_vars.port, mta);
 		}
 		if( artist ) {
 			if( (*mime == 'v') && (passed_args->filter & FILTER_UPNP_ACTOR) ) {

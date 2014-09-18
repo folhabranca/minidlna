@@ -97,6 +97,7 @@ enum event_type {
 
 static void SendResp_icon(struct upnphttp *, char * url);
 static void SendResp_albumArt(struct upnphttp *, char * url);
+static void SendResp_mta(struct upnphttp *, char * url);
 static void SendResp_caption(struct upnphttp *, char * url);
 static void SendResp_resizedimg(struct upnphttp *, char * url);
 static void SendResp_thumbnail(struct upnphttp *, char * url);
@@ -960,6 +961,10 @@ ProcessHttpQuery_upnphttp(struct upnphttp * h)
 		{
 			SendResp_albumArt(h, HttpUrl+10);
 		}
+		else if(strncmp(HttpUrl, "/MTA/", 5) == 0)
+		{
+			SendResp_mta(h, HttpUrl+5);
+		}
 		#ifdef TIVO_SUPPORT
 		else if(strncmp(HttpUrl, "/TiVoConnect", 12) == 0)
 		{
@@ -1438,6 +1443,83 @@ SendResp_albumArt(struct upnphttp * h, char * object)
 	}
 	close(fd);
 	CloseSocket_upnphttp(h);
+}
+
+static void
+SendResp_mta(struct upnphttp * h, char * object)
+{
+	char header[512];
+	char *path;
+	off_t size;
+	long long id;
+	int fd;
+	struct string_s str;
+	const char *tmode;
+
+	if( h->reqflags & (FLAG_XFERSTREAMING|FLAG_RANGE) )
+	{
+		DPRINTF(E_WARN, L_HTTP, "Client tried to specify transferMode as Streaming with an image!\n");
+		Send406(h);
+		return;
+	}
+
+	id = strtoll(object, NULL, 10);
+
+	path = sql_get_text_field(db, "SELECT PATH from MTA where ID = '%lld'", id);
+	if( !path )
+	{
+		DPRINTF(E_WARN, L_HTTP, "MTA ID %s not found, responding ERROR 404\n", object);
+		Send404(h);
+		return;
+	}
+#if USE_FORK
+	pid_t newpid = 0;
+	newpid = process_fork(h->req_client);
+	if( newpid > 0 )
+	{
+		goto mta_error;
+	}
+#endif
+	DPRINTF(E_INFO, L_HTTP, "Serving MTA file ID: %lld [%s]\n", id, path);
+
+	fd = open(path, O_RDONLY);
+	if( fd < 0 ) {
+		DPRINTF(E_ERROR, L_HTTP, "Error opening %s\n", path);
+		sqlite3_free(path);
+		Send404(h);
+		goto mta_error;
+	}
+
+	sqlite3_free(path);
+	size = lseek(fd, 0, SEEK_END);
+	lseek(fd, 0, SEEK_SET);
+
+	INIT_STR(str, header);
+
+#if USE_FORK
+	if( (h->reqflags & FLAG_XFERBACKGROUND) && (setpriority(PRIO_PROCESS, 0, 19) == 0) )
+		tmode = "Background";
+	else
+#endif
+		tmode = "Interactive";
+
+	start_dlna_header(&str, 200, tmode, "image/jpeg");
+	strcatf(&str, "Content-Length: %jd\r\n"
+	              "contentFeatures.dlna.org: DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=%08X%024X\r\n\r\n",
+	              (intmax_t)size, DLNA_FLAG_DLNA_V1_5|DLNA_FLAG_TM_B|DLNA_FLAG_TM_S, 0);
+
+	if( send_data(h, str.data, str.off, MSG_MORE) == 0 )
+		if( h->req_command != EHead )
+			send_file(h, fd, 0, size-1);
+
+	close(fd);
+mta_error:
+	CloseSocket_upnphttp(h);
+#if USE_FORK
+	if( newpid == 0 )
+		_exit(0);
+#endif
+
 }
 
 static void
