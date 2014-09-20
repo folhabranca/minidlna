@@ -83,4 +83,7 @@ CreateDatabase(void);
 void
 start_scanner();
 
+void
+GenerateMTA(const char *videopath);
+
 #endif

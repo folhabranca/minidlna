@@ -45,6 +45,7 @@
 #include "scanner.h"
 #include "albumart.h"
 #include "containers.h"
+#include "video_thumb.h"
 #include "log.h"
 
 #if SCANDIR_CONST
@@ -563,6 +564,9 @@ CreateDatabase(void)
 	ret = sql_exec(db, create_bookmarkTable_sqlite);
 	if( ret != SQLITE_OK )
 		goto sql_failed;
+	ret = sql_exec(db, create_MTATable_sqlite);
+	if( ret != SQLITE_OK )
+		goto sql_failed;
 	ret = sql_exec(db, create_playlistTable_sqlite);
 	if( ret != SQLITE_OK )
 		goto sql_failed;
@@ -607,6 +611,7 @@ CreateDatabase(void)
 	sql_exec(db, "create INDEX IDX_DETAILS_PATH ON DETAILS(PATH);");
 	sql_exec(db, "create INDEX IDX_DETAILS_ID ON DETAILS(ID);");
 	sql_exec(db, "create INDEX IDX_ALBUM_ART ON ALBUM_ART(ID);");
+	sql_exec(db, "create INDEX IDX_MTA ON MTA(ID);");
 	sql_exec(db, "create INDEX IDX_SCANNER_OPT ON OBJECTS(PARENT_ID, NAME, OBJECT_ID);");
 
 sql_failed:
@@ -818,6 +823,89 @@ ScanDirectory(const char *dir, const char *parent, media_types dir_types)
 	}
 }
 
+void
+GenerateMTA(const char *videopath)
+{
+	char *sql;
+	char **result;
+	int i, ret, cols, row;
+	char *id, *path, *duration, *mta_path;
+	int h,m,s;
+	char *dot;
+	int len;
+	int64_t mta_id;
+	int allblack, videolen;
+	long long unsigned int fileno = 0;
+
+	if (!runtime_vars.mta || runtime_vars.mta < 0)
+		return;
+
+	allblack = (runtime_vars.mta == 1);
+
+	if (videopath)
+	{
+		sql = sqlite3_mprintf("SELECT ID, PATH, DURATION from DETAILS where MIME glob 'v*' AND MTA ='0' and PATH = '%q'", videopath);
+		if (!sql)
+			return;
+	}
+	else
+	{
+		sql = sqlite3_mprintf("SELECT ID, PATH, DURATION from DETAILS where MIME glob 'v*' AND MTA ='0'");
+		if (!sql)
+			return;
+	}
+
+	ret = sql_get_table(db, sql, &result, &row, &cols);
+	if( ret != SQLITE_OK || !row )
+		goto mta_error;
+
+	if (!videopath)
+		DPRINTF(E_WARN, L_SCANNER, _("Starting MTA files generation ... \n"));
+
+	for (i = cols; i < (row + 1) * cols;)
+	{
+		id = result[i++];
+		path = result[i++];
+		duration = result[i++];
+
+		len = strnlen(duration, 15);
+		if (len < 11 || len == 15)
+			continue;
+
+		dot = index(duration, ':');
+		if (!dot || strnlen(dot, 11) != 10)
+			continue;
+
+		h = atoi(duration);
+		m = atoi(dot+1);
+		s = atoi(dot+4);
+		videolen = 3600 * h + 60 * m + s;
+
+		mta_path = video_thumb_generate_mta_file(path, videolen,
+				allblack ? 1: (runtime_vars.mta == 2 ? 0 : (videolen < 60 * runtime_vars.mta ? 1: 0 )));
+		if (!mta_path) {
+			continue;
+		}
+
+		if ( sql_exec(db, "INSERT into MTA (PATH) VALUES ('%q')", mta_path) == SQLITE_OK )
+		{
+			mta_id = sqlite3_last_insert_rowid(db);
+			if( sql_exec(db, "UPDATE DETAILS set MTA = %lld where ID = '%q'", (long long)mta_id, id) != SQLITE_OK)
+				DPRINTF(E_WARN, L_SCANNER, "Error setting %s as MTA file for %s\n", mta_path, path);
+		}
+		free(mta_path);
+		fileno++;
+
+	}
+
+	if (!videopath)
+		DPRINTF(E_WARN, L_SCANNER, _("MTA files generation finished (%llu files)!\n"), fileno);
+
+mta_error:
+	sqlite3_free_table(result);
+	sqlite3_free(sql);
+}
+
 static void
 _notify_start(void)
 {
@@ -891,6 +979,8 @@ start_scanner()
 	{
 		fill_playlists();
 	}
+
+	GenerateMTA(NULL);
 
 	DPRINTF(E_DEBUG, L_SCANNER, "Initial file scan completed\n");
 	//JM: Set up a db version number, so we know if we need to rebuild due to a new structure.
